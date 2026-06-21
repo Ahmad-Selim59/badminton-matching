@@ -32,6 +32,39 @@ export async function playAlarm(
   }
 }
 
+/** Repeating beep loop — call stop() to silence. */
+export function createAlarmLooper(audioContext: AudioContext) {
+  let running = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let high = true;
+
+  function scheduleNext() {
+    if (!running) return;
+    timeoutId = setTimeout(() => {
+      if (!running) return;
+      playBeep(audioContext, high ? 880 : 660, 280);
+      high = !high;
+      scheduleNext();
+    }, 750);
+  }
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      playBeep(audioContext, 880, 280);
+      scheduleNext();
+    },
+    stop() {
+      running = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    },
+  };
+}
+
 export function formatDuration(totalMs: number): string {
   const totalSec = Math.max(0, Math.floor(totalMs / 1000));
   const h = Math.floor(totalSec / 3600);

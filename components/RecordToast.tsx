@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RoundRecord } from "@/lib/types";
 
 export function RecordToast({
@@ -12,9 +12,15 @@ export function RecordToast({
   onDismiss: () => void;
   onViewHistory?: () => void;
 }) {
+  const [visible, setVisible] = useState(false);
+
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 6000);
-    return () => clearTimeout(timer);
+    const show = requestAnimationFrame(() => setVisible(true));
+    const timer = setTimeout(onDismiss, 3000);
+    return () => {
+      cancelAnimationFrame(show);
+      clearTimeout(timer);
+    };
   }, [round.id, onDismiss]);
 
   const gameWord = round.matches.length === 1 ? "game" : "games";
@@ -22,40 +28,41 @@ export function RecordToast({
   return (
     <div
       role="status"
-      className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-sm"
+      aria-live="polite"
+      className={`fixed left-4 right-4 top-20 z-50 mx-auto max-w-lg rounded-xl border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950 px-4 py-4 shadow-lg transition-all duration-300 ${
+        visible ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
+      }`}
     >
       <div className="flex items-start gap-3">
         <span
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-sm font-bold"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white text-lg font-bold"
           aria-hidden
         >
           ✓
         </span>
-        <div>
-          <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-            Round {round.roundNumber} recorded
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-semibold text-emerald-900 dark:text-emerald-100">
+            Round {round.roundNumber} recorded!
           </p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+          <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-0.5">
             {round.matches.length} {gameWord} saved to History
             {round.satOut.length > 0 &&
               ` · ${round.satOut.length} sat out`}
           </p>
+          {onViewHistory && (
+            <button
+              type="button"
+              onClick={onViewHistory}
+              className="mt-2 text-sm font-medium text-emerald-800 dark:text-emerald-200 underline underline-offset-2 hover:text-emerald-600 dark:hover:text-emerald-100"
+            >
+              View in History →
+            </button>
+          )}
         </div>
-      </div>
-      <div className="flex gap-2">
-        {onViewHistory && (
-          <button
-            type="button"
-            onClick={onViewHistory}
-            className="rounded-lg px-3 py-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors"
-          >
-            View History
-          </button>
-        )}
         <button
           type="button"
           onClick={onDismiss}
-          className="rounded-lg px-2 py-1.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-lg leading-none"
+          className="shrink-0 rounded-lg px-2 py-1 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xl leading-none"
           aria-label="Dismiss"
         >
           ×

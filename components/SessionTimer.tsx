@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatDuration, playAlarm } from "@/lib/timer-beep";
+import { formatDuration, createAlarmLooper } from "@/lib/timer-beep";
 import { cardClass, fieldClassSm } from "@/lib/ui";
 
 const LIMIT_KEY = "badminton-timer-limit";
@@ -63,6 +63,7 @@ function elapsedMs(state: PersistedTimer, now: number): number {
 
 export function SessionTimer() {
   const audioRef = useRef<AudioContext | null>(null);
+  const alarmLoopRef = useRef<ReturnType<typeof createAlarmLooper> | null>(null);
   const alarmFiredRef = useRef(false);
 
   const [limitMinutes, setLimitMinutes] = useState(90);
@@ -115,9 +116,19 @@ export function SessionTimer() {
         saveTimer(next);
         return next;
       });
-      playAlarm(getAudio()).catch(() => {});
     }
-  }, [tick, timer.status, elapsed, limitMs, getAudio]);
+  }, [tick, timer.status, elapsed, limitMs]);
+
+  useEffect(() => {
+    if (timer.status === "alarm") {
+      const ctx = getAudio();
+      alarmLoopRef.current ??= createAlarmLooper(ctx);
+      alarmLoopRef.current.start();
+    } else {
+      alarmLoopRef.current?.stop();
+    }
+    return () => alarmLoopRef.current?.stop();
+  }, [timer.status, getAudio]);
 
   function persist(next: PersistedTimer) {
     setTimer(next);
@@ -166,6 +177,7 @@ export function SessionTimer() {
 
   function handleReset() {
     alarmFiredRef.current = false;
+    alarmLoopRef.current?.stop();
     persist({
       status: "idle",
       accumulatedMs: 0,
@@ -315,7 +327,7 @@ export function SessionTimer() {
           role="alert"
           className="mt-3 rounded-lg bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 px-3 py-2 text-sm font-medium text-red-800 dark:text-red-200"
         >
-          Time limit reached — wrap up this round!
+          Time limit reached — wrap up this round! Alarm repeats until dismissed.
         </p>
       )}
     </div>

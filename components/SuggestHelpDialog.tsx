@@ -27,10 +27,10 @@ const SECTIONS = [
   {
     title: "Partner & opponent rotation",
     bullets: [
-      "Doubles: avoids putting the same four on a court again — mixing the group matters more than swapping teams within it.",
-      "Also penalises when three of the same people meet on one court.",
-      "With a big group (e.g. 30 players), fresh foursomes are easy — no need to reshuffle teams inside the same four.",
-      "Singles still avoids repeat opponents.",
+      "Each possible group gets a score: bonus for never met, extra penalty if they played last round, penalty for repeats.",
+      "Doubles: avoids the same four on a court; also discourages three of the same people meeting again.",
+      "Fairness bonus for players who've sat out or played fewer games overall.",
+      "Tries many combinations each suggest (not just list order) and picks the best full round.",
     ],
   },
   {

@@ -5,10 +5,12 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { clearState, ensureAppState, loadState, saveState } from "@/lib/storage";
 import { applyRecordRound } from "@/lib/round-history";
+import { uniquePlayerName } from "@/lib/player-names";
 import { suggestFixtures as computeSuggestions } from "@/lib/suggest-fixtures";
 import {
   AppState,
@@ -66,6 +68,8 @@ function syncFixtures(courts: Court[], fixtures: Fixture[]): Fixture[] {
 export function AppStateProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(DEFAULT_STATE);
   const [hydrated, setHydrated] = useState(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     setState(loadState());
@@ -132,16 +136,10 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
       const trimmed = name.trim();
       if (!trimmed) return;
       update((prev) => {
-        if (
-          prev.players.some(
-            (p) => p.name.toLowerCase() === trimmed.toLowerCase()
-          )
-        ) {
-          return prev;
-        }
+        const displayName = uniquePlayerName(prev.players, trimmed);
         const player: Player = {
           id: generateId(),
-          name: trimmed,
+          name: displayName,
           totalGames: 0,
           consecutiveGames: 0,
           consecutiveSits: 0,
@@ -194,14 +192,11 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, [update]);
 
   const recordRound = useCallback((): RoundRecord | null => {
-    let recorded: RoundRecord | null = null;
-    update((prev) => {
-      const { next, round } = applyRecordRound(ensureAppState(prev));
-      recorded = round;
-      return next;
-    });
-    return recorded;
-  }, [update]);
+    const { next, round } = applyRecordRound(ensureAppState(stateRef.current));
+    if (!round) return null;
+    setState(next);
+    return round;
+  }, []);
 
   const clearAll = useCallback(() => {
     clearState();

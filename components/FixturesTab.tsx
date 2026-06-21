@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { fixtureRoundType, isBalancedFixture } from "@/lib/suggest-fixtures";
 import { CourtType, playersNeeded } from "@/lib/types";
@@ -19,10 +19,22 @@ export function FixturesTab({
     useAppState();
   const [helpOpen, setHelpOpen] = useState(false);
   const [recordedRound, setRecordedRound] = useState<RoundRecord | null>(null);
+  const [justRecorded, setJustRecorded] = useState(false);
+  const [isSuggesting, startSuggestTransition] = useTransition();
+
+  function handleSuggest() {
+    startSuggestTransition(() => {
+      suggestFixtures();
+    });
+  }
 
   function handleRecord() {
     const round = recordRound();
-    if (round) setRecordedRound(round);
+    if (round) {
+      setRecordedRound(round);
+      setJustRecorded(true);
+      setTimeout(() => setJustRecorded(false), 2500);
+    }
   }
 
   const sortedCourts = [...state.courts].sort((a, b) => a.number - b.number);
@@ -69,6 +81,8 @@ export function FixturesTab({
 
   const canRecord = courtsWithPlayers.length > 0;
 
+  const totalRounds = state.roundHistory.length;
+
   if (sortedCourts.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-stone-300 dark:border-stone-600 bg-stone-50 dark:bg-stone-900/50 px-6 py-12 text-center">
@@ -96,9 +110,30 @@ export function FixturesTab({
         <RecordToast
           round={recordedRound}
           onDismiss={() => setRecordedRound(null)}
-          onViewHistory={onViewHistory}
+          onViewHistory={
+            onViewHistory
+              ? () => {
+                  setRecordedRound(null);
+                  onViewHistory();
+                }
+              : undefined
+          }
         />
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 px-4 py-3">
+        <div>
+          <p className="text-xs text-stone-500 dark:text-stone-400 uppercase tracking-wide font-medium">
+            Session total
+          </p>
+          <p className="text-2xl font-semibold tabular-nums text-emerald-900 dark:text-emerald-100">
+            {totalRounds}{" "}
+            <span className="text-base font-medium text-stone-600 dark:text-stone-400">
+              {totalRounds === 1 ? "round" : "rounds"} played
+            </span>
+          </p>
+        </div>
+      </div>
 
       <SessionTimer />
 
@@ -118,17 +153,22 @@ export function FixturesTab({
             ?
           </button>
           <button
-            onClick={suggestFixtures}
-            className={btnOutline}
+            onClick={handleSuggest}
+            disabled={isSuggesting}
+            className={`${btnOutline} disabled:opacity-60`}
           >
-            Suggest games
+            {isSuggesting ? "Suggesting…" : "Suggest games"}
           </button>
           <button
             onClick={handleRecord}
             disabled={!canRecord}
-            className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className={`rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              justRecorded
+                ? "bg-emerald-500 text-white ring-2 ring-emerald-300 ring-offset-2 dark:ring-offset-stone-950"
+                : "bg-emerald-600 text-white hover:bg-emerald-700"
+            }`}
           >
-            Record round
+            {justRecorded ? "Recorded ✓" : "Record round"}
           </button>
         </div>
       </div>
