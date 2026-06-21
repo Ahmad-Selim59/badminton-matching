@@ -48,6 +48,10 @@ export interface AppState {
   partnerCounts: Record<string, number>;
   /** Times two players faced each other. Key: sorted id pair. */
   opponentCounts: Record<string, number>;
+  /** Times the same four played doubles on one court. Key: sorted four ids. */
+  foursomeCounts: Record<string, number>;
+  /** Times three players shared a doubles court. Key: sorted three ids. */
+  tripletCounts: Record<string, number>;
   roundHistory: RoundRecord[];
 }
 
@@ -57,6 +61,8 @@ export const DEFAULT_STATE: AppState = {
   fixtures: [],
   partnerCounts: {},
   opponentCounts: {},
+  foursomeCounts: {},
+  tripletCounts: {},
   roundHistory: [],
 };
 

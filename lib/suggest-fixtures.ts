@@ -11,8 +11,22 @@ export function pairKey(a: string, b: string): string {
   return [a, b].sort().join("|");
 }
 
+export function groupKey(ids: string[]): string {
+  return [...ids].sort().join("|");
+}
+
 function getCount(counts: Record<string, number>, a: string, b: string): number {
   return counts[pairKey(a, b)] ?? 0;
+}
+
+function tripletKeys(ids: [string, string, string, string]): string[] {
+  const [a, b, c, d] = ids;
+  return [
+    groupKey([a, b, c]),
+    groupKey([a, b, d]),
+    groupKey([a, c, d]),
+    groupKey([b, c, d]),
+  ];
 }
 
 /** Higher = more urgent to play this round. */
@@ -36,41 +50,31 @@ function combinations<T>(items: T[], size: number): T[][] {
   ];
 }
 
-function bestDoublesSplit(
+/** Penalty for reusing the same court group. Lower = fresher foursome. */
+function foursomeRepeatScore(
   ids: [string, string, string, string],
-  partnerCounts: Record<string, number>,
-  opponentCounts: Record<string, number>
-): { playerIds: string[]; score: number } {
-  const splits: [[string, string], [string, string]][] = [
-    [[ids[0], ids[1]], [ids[2], ids[3]]],
-    [[ids[0], ids[2]], [ids[1], ids[3]]],
-    [[ids[0], ids[3]], [ids[1], ids[2]]],
-  ];
-
-  let best = { playerIds: [...ids] as string[], score: Infinity };
-
-  for (const [team1, team2] of splits) {
-    let score = 0;
-    score += getCount(partnerCounts, team1[0], team1[1]) * 50;
-    score += getCount(partnerCounts, team2[0], team2[1]) * 50;
-    for (const a of team1) {
-      for (const b of team2) {
-        score += getCount(opponentCounts, a, b) * 20;
-      }
-    }
-    const lineup = [...team1, ...team2];
-    if (score < best.score) {
-      best = { playerIds: lineup, score };
-    }
+  foursomeCounts: Record<string, number> = {},
+  tripletCounts: Record<string, number> = {}
+): number {
+  let score = (foursomeCounts[groupKey(ids)] ?? 0) * 300;
+  for (const key of tripletKeys(ids)) {
+    score += (tripletCounts[key] ?? 0) * 80;
   }
+  return score;
+}
 
-  return best;
+/** Stable 2v2 from four ids — no team-split search. */
+function defaultDoublesLineup(
+  ids: [string, string, string, string]
+): string[] {
+  const sorted = [...ids].sort();
+  return [sorted[0], sorted[1], sorted[2], sorted[3]];
 }
 
 function pickDoublesFour(
   available: Player[],
-  partnerCounts: Record<string, number>,
-  opponentCounts: Record<string, number>
+  foursomeCounts: Record<string, number>,
+  tripletCounts: Record<string, number>
 ): { playerIds: string[]; picked: Player[] } | null {
   if (available.length < 4) return null;
 
@@ -79,12 +83,16 @@ function pickDoublesFour(
 
   for (const combo of combinations(available, 4)) {
     const ids = combo.map((p) => p.id) as [string, string, string, string];
-    const split = bestDoublesSplit(ids, partnerCounts, opponentCounts);
+    const repeatScore = foursomeRepeatScore(ids, foursomeCounts, tripletCounts);
     const prioritySum = combo.reduce((s, p) => s + playerPriority(p), 0);
-    const score = split.score - prioritySum;
+    const score = repeatScore - prioritySum;
 
     if (!best || score < best.score) {
-      best = { playerIds: split.playerIds, picked: combo, score };
+      best = {
+        playerIds: defaultDoublesLineup(ids),
+        picked: combo,
+        score,
+      };
     }
   }
 
@@ -131,7 +139,6 @@ function resolveRoundType(
 ): CourtType | null {
   if (court.type === "doubles" && availableCount >= 4) return "doubles";
   if (court.type === "singles" && availableCount >= 2) return "singles";
-  // Not enough for configured type — use leftovers as singles (never 2v1)
   if (availableCount >= 4) return "doubles";
   if (availableCount >= 2) return "singles";
   return null;
@@ -159,9 +166,17 @@ function assignPick(
 }
 
 export function suggestFixtures(state: AppState): Fixture[] {
-  const courts = [...state.courts].sort((a, b) => a.number - b.number);
+  const s: AppState = {
+    ...state,
+    foursomeCounts: state.foursomeCounts ?? {},
+    tripletCounts: state.tripletCounts ?? {},
+    partnerCounts: state.partnerCounts ?? {},
+    opponentCounts: state.opponentCounts ?? {},
+  };
 
-  if (state.players.length === 0 || courts.length === 0) {
+  const courts = [...s.courts].sort((a, b) => a.number - b.number);
+
+  if (s.players.length === 0 || courts.length === 0) {
     return courts.map((c) => ({
       courtId: c.id,
       playerIds: Array(playersNeeded(c.type)).fill(""),
@@ -170,10 +185,10 @@ export function suggestFixtures(state: AppState): Fixture[] {
   }
 
   const maxSlots = Math.min(
-    state.players.length,
+    s.players.length,
     courts.reduce((sum, c) => sum + playersNeeded(c.type), 0)
   );
-  let available = buildPlayPool(state.players, maxSlots);
+  let available = buildPlayPool(s.players, maxSlots);
   const fixtures: Fixture[] = [];
 
   for (const court of courts) {
@@ -187,8 +202,8 @@ export function suggestFixtures(state: AppState): Fixture[] {
     if (roundType === "doubles") {
       const pick = pickDoublesFour(
         available,
-        state.partnerCounts,
-        state.opponentCounts
+        s.foursomeCounts,
+        s.tripletCounts
       );
       if (!pick) {
         fixtures.push(emptyFixture(court));
@@ -198,7 +213,7 @@ export function suggestFixtures(state: AppState): Fixture[] {
       const pickedIds = new Set(pick.picked.map((p) => p.id));
       available = available.filter((p) => !pickedIds.has(p.id));
     } else {
-      const pick = pickSinglesTwo(available, state.opponentCounts);
+      const pick = pickSinglesTwo(available, s.opponentCounts);
       if (!pick) {
         fixtures.push(emptyFixture(court));
         continue;
@@ -212,38 +227,41 @@ export function suggestFixtures(state: AppState): Fixture[] {
   return fixtures;
 }
 
-export function fixtureRoundType(
-  fixture: Fixture,
-  court: Court
-): CourtType {
+export function fixtureRoundType(fixture: Fixture, court: Court): CourtType {
   return fixture.roundType ?? court.type;
 }
 
-export function isBalancedFixture(
-  fixture: Fixture,
-  court: Court
-): boolean {
+export function isBalancedFixture(fixture: Fixture, court: Court): boolean {
   const type = fixtureRoundType(fixture, court);
   const filled = fixture.playerIds.filter(Boolean).length;
   return filled === 0 || filled === playersNeeded(type);
+}
+
+function bumpCount(counts: Record<string, number>, key: string) {
+  counts[key] = (counts[key] ?? 0) + 1;
 }
 
 export function recordMatchHistory(
   fixtures: Fixture[],
   courts: Court[],
   partnerCounts: Record<string, number>,
-  opponentCounts: Record<string, number>
+  opponentCounts: Record<string, number>,
+  foursomeCounts: Record<string, number>,
+  tripletCounts: Record<string, number>
 ): {
   partnerCounts: Record<string, number>;
   opponentCounts: Record<string, number>;
+  foursomeCounts: Record<string, number>;
+  tripletCounts: Record<string, number>;
 } {
-  const partners = { ...partnerCounts };
-  const opponents = { ...opponentCounts };
+  const partners = { ...(partnerCounts ?? {}) };
+  const opponents = { ...(opponentCounts ?? {}) };
+  const foursomes = { ...(foursomeCounts ?? {}) };
+  const triplets = { ...(tripletCounts ?? {}) };
   const courtMap = new Map(courts.map((c) => [c.id, c]));
 
-  function bump(counts: Record<string, number>, a: string, b: string) {
-    const key = pairKey(a, b);
-    counts[key] = (counts[key] ?? 0) + 1;
+  function bumpPair(counts: Record<string, number>, a: string, b: string) {
+    bumpCount(counts, pairKey(a, b));
   }
 
   for (const fixture of fixtures) {
@@ -257,17 +275,27 @@ export function recordMatchHistory(
 
     if (type === "doubles") {
       const [a, b, c, d] = ids;
-      bump(partners, a, b);
-      bump(partners, c, d);
+      const four = [a, b, c, d] as [string, string, string, string];
+      bumpCount(foursomes, groupKey(four));
+      for (const key of tripletKeys(four)) {
+        bumpCount(triplets, key);
+      }
+      bumpPair(partners, a, b);
+      bumpPair(partners, c, d);
       for (const x of [a, b]) {
         for (const y of [c, d]) {
-          bump(opponents, x, y);
+          bumpPair(opponents, x, y);
         }
       }
     } else {
-      bump(opponents, ids[0], ids[1]);
+      bumpPair(opponents, ids[0], ids[1]);
     }
   }
 
-  return { partnerCounts: partners, opponentCounts: opponents };
+  return {
+    partnerCounts: partners,
+    opponentCounts: opponents,
+    foursomeCounts: foursomes,
+    tripletCounts: triplets,
+  };
 }

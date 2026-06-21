@@ -27,9 +27,10 @@ const SECTIONS = [
   {
     title: "Partner & opponent rotation",
     bullets: [
-      "After each recorded round we remember who partnered and who faced whom.",
-      "Doubles: tries all 3 ways to split 4 players into 2v2, picks the freshest pairings.",
-      "Repeating the same partner is penalised more than repeating an opponent.",
+      "Doubles: avoids putting the same four on a court again — mixing the group matters more than swapping teams within it.",
+      "Also penalises when three of the same people meet on one court.",
+      "With a big group (e.g. 30 players), fresh foursomes are easy — no need to reshuffle teams inside the same four.",
+      "Singles still avoids repeat opponents.",
     ],
   },
   {

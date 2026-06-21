@@ -16,8 +16,15 @@ function normalizeState(parsed: Partial<AppState>): AppState {
     players: (parsed.players ?? []).map(normalizePlayer),
     partnerCounts: parsed.partnerCounts ?? {},
     opponentCounts: parsed.opponentCounts ?? {},
+    foursomeCounts: parsed.foursomeCounts ?? {},
+    tripletCounts: parsed.tripletCounts ?? {},
     roundHistory: parsed.roundHistory ?? [],
   };
+}
+
+/** Fill in any fields missing from older or partial state. */
+export function ensureAppState(state: Partial<AppState>): AppState {
+  return normalizeState(state);
 }
 
 export function loadState(): AppState {

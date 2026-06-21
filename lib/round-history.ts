@@ -120,11 +120,13 @@ export function applyRecordRound(prev: AppState): {
     };
   });
 
-  const { partnerCounts, opponentCounts } = recordMatchHistory(
+  const history = recordMatchHistory(
     prev.fixtures,
     prev.courts,
     prev.partnerCounts,
-    prev.opponentCounts
+    prev.opponentCounts,
+    prev.foursomeCounts,
+    prev.tripletCounts
   );
 
   return {
@@ -132,8 +134,7 @@ export function applyRecordRound(prev: AppState): {
     next: {
       ...prev,
       players,
-      partnerCounts,
-      opponentCounts,
+      ...history,
       roundHistory: [roundRecord, ...prev.roundHistory],
     },
   };

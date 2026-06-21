@@ -7,7 +7,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { clearState, loadState, saveState } from "@/lib/storage";
+import { clearState, ensureAppState, loadState, saveState } from "@/lib/storage";
 import { applyRecordRound } from "@/lib/round-history";
 import { suggestFixtures as computeSuggestions } from "@/lib/suggest-fixtures";
 import {
@@ -81,7 +81,7 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (hydrated) saveState(state);
+    if (hydrated) saveState(ensureAppState(state));
   }, [state, hydrated]);
 
   const update = useCallback((fn: (prev: AppState) => AppState) => {
@@ -184,16 +184,19 @@ export function AppStateProvider({ children }: { children: React.ReactNode }) {
   );
 
   const suggestFixtures = useCallback(() => {
-    update((prev) => ({
-      ...prev,
-      fixtures: syncFixtures(prev.courts, computeSuggestions(prev)),
-    }));
+    update((prev) => {
+      const safe = ensureAppState(prev);
+      return {
+        ...safe,
+        fixtures: syncFixtures(safe.courts, computeSuggestions(safe)),
+      };
+    });
   }, [update]);
 
   const recordRound = useCallback((): RoundRecord | null => {
     let recorded: RoundRecord | null = null;
     update((prev) => {
-      const { next, round } = applyRecordRound(prev);
+      const { next, round } = applyRecordRound(ensureAppState(prev));
       recorded = round;
       return next;
     });
