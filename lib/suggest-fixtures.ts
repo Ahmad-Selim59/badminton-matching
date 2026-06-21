@@ -276,13 +276,33 @@ function shufflePool<T>(items: T[], seed: number): T[] {
   return arr;
 }
 
-function buildPlayPool(players: Player[], slotsNeeded: number): Player[] {
-  const rested = players.filter((p) => p.consecutiveGames < 2);
-  const pool =
-    rested.length >= slotsNeeded
-      ? rested
-      : [...players].sort((a, b) => a.consecutiveGames - b.consecutiveGames);
-  return pool;
+/**
+ * Strict ordering for *who plays vs who sits* — a hard fairness constraint,
+ * not a soft score. Lower (earlier) = more entitled to a spot this round.
+ *
+ * Order of precedence:
+ *   1. Players forced to sit (2+ games in a row) go last — they only play if
+ *      there genuinely aren't enough others.
+ *   2. More sits-in-a-row first (someone who sat last round outranks anyone
+ *      who played last round — this is the invariant the user cares about).
+ *   3. Fewer games-in-a-row first.
+ *   4. Fewer total games first.
+ *   5. Id, for deterministic tie-breaks.
+ *
+ * Because consecutiveSits is compared before anything a player who played can
+ * win on, it is impossible for a player to sit two rounds running while
+ * another plays two rounds running.
+ */
+function compareForPlay(a: Player, b: Player): number {
+  const aMustSit = a.consecutiveGames >= 2 ? 1 : 0;
+  const bMustSit = b.consecutiveGames >= 2 ? 1 : 0;
+  if (aMustSit !== bMustSit) return aMustSit - bMustSit;
+  if (a.consecutiveSits !== b.consecutiveSits)
+    return b.consecutiveSits - a.consecutiveSits;
+  if (a.consecutiveGames !== b.consecutiveGames)
+    return a.consecutiveGames - b.consecutiveGames;
+  if (a.totalGames !== b.totalGames) return a.totalGames - b.totalGames;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 function resolveRoundType(
@@ -588,13 +608,18 @@ export function suggestFixtures(state: AppState): Fixture[] {
   }
 
   const ctx = buildScoringContext(s);
-  const slotsNeeded = courts.reduce((sum, c) => {
-    const type = resolveRoundType(c, s.players.length);
-    return sum + (type ? playersNeeded(type) : 0);
-  }, 0);
 
-  const pool = buildPlayPool(s.players, slotsNeeded);
-  const courtSlots = planCourtSlots(courts, pool.length);
+  // Decide who plays vs who sits FIRST, as a hard fairness constraint. The
+  // most-entitled players (by compareForPlay) fill the available court slots;
+  // everyone else sits. Diversity optimisation below only *arranges* this set,
+  // so it can never bench someone who is owed a game.
+  const ranked = [...s.players].sort(compareForPlay);
+  const courtSlots = planCourtSlots(courts, ranked.length);
+  const totalSlots = courtSlots.reduce(
+    (sum, slot) => sum + (slot.type ? playersNeeded(slot.type) : 0),
+    0
+  );
+  const pool = ranked.slice(0, totalSlots);
 
   let bestFixtures: Fixture[] | null = null;
   let bestScore = -Infinity;

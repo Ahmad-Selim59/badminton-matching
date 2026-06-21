@@ -124,6 +124,19 @@ function runSeason(): SeasonResult {
     if (!round) throw new Error(`Round ${r} produced no matches`);
     state = next;
 
+    // Hard fairness invariant: with 30 players and only 16 slots there are
+    // always enough rested players, so nobody should ever sit two rounds in a
+    // row while someone else plays two in a row.
+    const satTwice = state.players.filter((p) => p.consecutiveSits >= 2);
+    const playedTwice = state.players.filter((p) => p.consecutiveGames >= 2);
+    if (satTwice.length > 0 && playedTwice.length > 0) {
+      throw new Error(
+        `FAIRNESS VIOLATION after round ${r}: ` +
+          `${satTwice.map((p) => p.name).join(", ")} sat 2+ in a row while ` +
+          `${playedTwice.map((p) => p.name).join(", ")} played 2+ in a row.`
+      );
+    }
+
     const { partners, opponents } = extractPairs(round);
     const partnerSet = new Set(partners);
 
