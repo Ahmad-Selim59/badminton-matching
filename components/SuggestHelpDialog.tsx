@@ -4,15 +4,26 @@ import { useEffect, useRef } from "react";
 
 const SECTIONS = [
   {
-    title: "Suggest games",
-    body: "Fills courts in order (Court 1, 2, 3…). You can tweak any pick before recording the round.",
+    title: "How it works (two steps)",
+    body: "First it decides WHO plays this round (fairness), then it works out the BEST matchups for those players (variety). Fairness is decided first and never gets overridden by matchmaking. You can tweak any pick before recording.",
   },
   {
-    title: "Who plays vs sits",
+    title: "Step 1 — Who plays vs sits",
     bullets: [
+      "Whoever has sat out longest gets a spot first — this is a hard rule, not a preference.",
+      "Nobody ever sits two rounds in a row while someone else plays two in a row (unless there aren't enough players to fill the courts).",
       "Players on 2+ games in a row sit out when enough others are available.",
-      "Players who've been waiting (sits in a row) get priority.",
-      "Fewer total games also helps someone get picked.",
+      "Ties broken by fewest total games, so everyone trends to the same count.",
+    ],
+  },
+  {
+    title: "Step 2 — Best matchups",
+    bullets: [
+      "Only the players chosen in Step 1 are arranged — matchmaking can never bench someone who's owed a game.",
+      "Prefers people who've never partnered or played each other; penalises repeats.",
+      "Extra penalty for repeating last round's partners, so pairings keep changing.",
+      "Doubles: avoids the same four on a court and discourages the same trio meeting again.",
+      "Tries many arrangements and swaps players between courts to find the most varied full round.",
     ],
   },
   {
@@ -22,15 +33,6 @@ const SECTIONS = [
       "Never 2v1 or other lopsided teams.",
       "10 players on 4 doubles courts → 2 doubles + 1 singles, 1 court unused.",
       "Extra players who don't fit a full court sit this round out.",
-    ],
-  },
-  {
-    title: "Partner & opponent rotation",
-    bullets: [
-      "Each possible group gets a score: bonus for never met, extra penalty if they played last round, penalty for repeats.",
-      "Doubles: avoids the same four on a court; also discourages three of the same people meeting again.",
-      "Fairness bonus for players who've sat out or played fewer games overall.",
-      "Tries many combinations each suggest (not just list order) and picks the best full round.",
     ],
   },
   {

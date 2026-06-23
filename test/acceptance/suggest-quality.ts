@@ -23,7 +23,7 @@ import { AppState, Court, Player, RoundRecord } from "../../lib/types";
 
 const COURTS = 4;
 const PLAYERS = 30;
-const ROUNDS = 20;
+const ROUNDS = 50;
 const REGRESSION_THRESHOLD = 0.06; // 6% worse than last run => fail
 
 const WEIGHTS = {
