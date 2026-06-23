@@ -229,51 +229,87 @@ function printReport(result: SeasonResult) {
   console.log(`\n  QUALITY = ${result.quality.toFixed(2)} / 100`);
 }
 
+interface Baseline {
+  recordedAt: string;
+  quality: number;
+  metrics: {
+    fairness: number;
+    partnerDiversity: number;
+    opponentDiversity: number;
+    freshness: number;
+  };
+}
+
+function toBaseline(result: SeasonResult): Baseline {
+  return {
+    recordedAt: new Date().toISOString(),
+    quality: result.quality,
+    metrics: {
+      fairness: result.fairness,
+      partnerDiversity: result.partnerDiversity,
+      opponentDiversity: result.opponentDiversity,
+      freshness: result.freshness,
+    },
+  };
+}
+
 function main() {
   const forceUpdate = process.argv.includes("--update");
   const result = runSeason();
   printReport(result);
 
-  let baseline: { quality: number; recordedAt: string } | null = null;
+  let baseline: Baseline | null = null;
   if (existsSync(BASELINE_PATH)) {
-    baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+    const parsed = JSON.parse(readFileSync(BASELINE_PATH, "utf8"));
+    if (parsed && parsed.metrics) baseline = parsed as Baseline;
   }
 
   const saveBaseline = () => {
     mkdirSync(dirname(BASELINE_PATH), { recursive: true });
-    writeFileSync(
-      BASELINE_PATH,
-      JSON.stringify(
-        { quality: result.quality, recordedAt: new Date().toISOString() },
-        null,
-        2
-      ) + "\n"
-    );
+    writeFileSync(BASELINE_PATH, JSON.stringify(toBaseline(result), null, 2) + "\n");
   };
 
   if (forceUpdate || !baseline) {
     saveBaseline();
     console.log(
       baseline
-        ? `\nBaseline overwritten -> ${result.quality.toFixed(2)}`
-        : `\nNo baseline found. Saved first baseline -> ${result.quality.toFixed(2)}`
+        ? `\nBaseline overwritten -> quality ${result.quality.toFixed(2)}`
+        : `\nNo baseline found. Saved first baseline -> quality ${result.quality.toFixed(2)}`
     );
     console.log("\nPASS\n");
     return;
   }
 
-  const floor = baseline.quality * (1 - REGRESSION_THRESHOLD);
-  const deltaPct = (result.quality - baseline.quality) / baseline.quality;
-  console.log(
-    `\nBaseline: ${baseline.quality.toFixed(2)} | Now: ${result.quality.toFixed(2)} | ` +
-      `Delta: ${deltaPct >= 0 ? "+" : ""}${(deltaPct * 100).toFixed(2)}% | ` +
-      `Floor (-${REGRESSION_THRESHOLD * 100}%): ${floor.toFixed(2)}`
-  );
+  // Compare each tracked metric (plus overall quality) against the baseline.
+  // Any one regressing by >= REGRESSION_THRESHOLD fails the run.
+  const checks: { name: string; now: number; was: number; scale: number }[] = [
+    { name: "Quality", now: result.quality, was: baseline.quality, scale: 1 },
+    { name: "Play fairness", now: result.fairness, was: baseline.metrics.fairness, scale: 100 },
+    { name: "Partner diversity", now: result.partnerDiversity, was: baseline.metrics.partnerDiversity, scale: 100 },
+    { name: "Opponent diversity", now: result.opponentDiversity, was: baseline.metrics.opponentDiversity, scale: 100 },
+    { name: "Freshness", now: result.freshness, was: baseline.metrics.freshness, scale: 100 },
+  ];
 
-  if (result.quality < floor) {
+  console.log("\nRegression check (vs last accepted run):");
+  console.log("Metric             |    was |    now |   delta | status");
+  console.log("-------------------+--------+--------+---------+-------");
+  const failures: string[] = [];
+  for (const c of checks) {
+    const floor = c.was * (1 - REGRESSION_THRESHOLD);
+    const deltaPct = c.was === 0 ? 0 : ((c.now - c.was) / c.was) * 100;
+    const ok = c.now >= floor;
+    if (!ok) failures.push(c.name);
+    const fmt = (n: number) => (c.scale === 1 ? n.toFixed(2) : (n * 100).toFixed(1));
+    console.log(
+      `${c.name.padEnd(18)} | ${fmt(c.was).padStart(6)} | ${fmt(c.now).padStart(6)} | ` +
+        `${(deltaPct >= 0 ? "+" : "") + deltaPct.toFixed(2)}%`.padStart(8) +
+        ` | ${ok ? "ok" : "FAIL"}`
+    );
+  }
+
+  if (failures.length > 0) {
     console.error(
-      `\nFAIL: quality regressed by ${(Math.abs(deltaPct) * 100).toFixed(2)}% ` +
-        `(>= ${REGRESSION_THRESHOLD * 100}% threshold).\n`
+      `\nFAIL: ${failures.join(", ")} regressed by >= ${REGRESSION_THRESHOLD * 100}%.\n`
     );
     process.exit(1);
   }

@@ -1,4 +1,10 @@
 {
+  "recordedAt": "2026-06-23T17:37:00.366Z",
   "quality": 80.54999999999998,
-  "recordedAt": "2026-06-23T17:34:14.834Z"
+  "metrics": {
+    "fairness": 0.9625,
+    "partnerDiversity": 0.75,
+    "opponentDiversity": 0.45875,
+    "freshness": 1
+  }
 }
